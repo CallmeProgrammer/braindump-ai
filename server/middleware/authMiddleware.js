@@ -1,0 +1,47 @@
+import jwt from "jsonwebtoken";
+
+export function protect(req, res, next) {
+  try {
+    const authHeader =
+      req.headers.authorization;
+
+    if (
+      !authHeader ||
+      !authHeader.startsWith("Bearer ")
+    ) {
+      return res.status(401).json({
+        message:
+          "Not authorized. Token missing.",
+      });
+    }
+
+    const token =
+      authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    if (!decoded.id) {
+      return res.status(401).json({
+        message:
+          "Not authorized. Invalid token.",
+      });
+    }
+
+    req.userId = decoded.id;
+
+    next();
+  } catch (error) {
+    console.error(
+      "Authentication error:",
+      error.message
+    );
+
+    return res.status(401).json({
+      message:
+        "Not authorized. Invalid token.",
+    });
+  }
+}

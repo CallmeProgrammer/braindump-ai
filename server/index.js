@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -6,31 +7,43 @@ import mongoose from "mongoose";
 import authRoutes from "./routes/authRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+
 dotenv.config();
 
 const app = express();
 
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 /*
   ===============================
-  MIDDLEWARE
+  CORS CONFIGURATION
   ===============================
 */
 
-/*
-  CORS
-*/
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error("Not allowed by CORS")
+      );
+    },
+  })
+);
 
 /*
+  ===============================
   JSON BODY PARSER
-
-  Increased from the default limit
-  because profile images are currently
-  being sent as base64 strings.
+  ===============================
 */
 
 app.use(
@@ -66,14 +79,13 @@ async function connectDatabase() {
 
 /*
   ===============================
-  TEST ROUTE
+  HEALTH CHECK ROUTE
   ===============================
 */
 
 app.get("/", (req, res) => {
   res.status(200).json({
-    message:
-      "BrainDump AI backend is running",
+    message: "BrainDump AI backend is running",
   });
 });
 
@@ -81,13 +93,6 @@ app.get("/", (req, res) => {
   ===============================
   AUTH ROUTES
   ===============================
-
-  POST   /api/auth/signup
-  POST   /api/auth/login
-  GET    /api/auth/me
-  PATCH  /api/auth/profile
-  PATCH  /api/auth/password
-  DELETE /api/auth/account
 */
 
 app.use(
@@ -99,11 +104,6 @@ app.use(
   ===============================
   TASK ROUTES
   ===============================
-
-  GET    /api/tasks
-  POST   /api/tasks
-  PATCH  /api/tasks/:id/toggle
-  DELETE /api/tasks/:id
 */
 
 app.use(
@@ -111,57 +111,56 @@ app.use(
   taskRoutes
 );
 
+/*
+  ===============================
+  AI ROUTES
+  ===============================
+*/
+
 app.use(
   "/api/ai",
   aiRoutes
 );
+
 /*
   ===============================
   ERROR HANDLER
   ===============================
 */
 
-/*
-  Handles oversized JSON requests.
-
-  This is particularly useful for
-  profile image uploads.
-*/
-
-app.use(
-  (error, req, res, next) => {
-    if (
-      error instanceof SyntaxError &&
-      error.status === 400 &&
-      "body" in error
-    ) {
-      return res.status(400).json({
-        message:
-          "Invalid JSON request.",
-      });
-    }
-
-    if (
-      error.type ===
-      "entity.too.large"
-    ) {
-      return res.status(413).json({
-        message:
-          "Request is too large. Please use a smaller profile image.",
-      });
-    }
-
-    console.error(
-      "Unhandled server error:",
-      error
-    );
-
-    return res.status(500).json({
-      message:
-        "Internal server error.",
+app.use((error, req, res, next) => {
+  if (
+    error instanceof SyntaxError &&
+    error.status === 400 &&
+    "body" in error
+  ) {
+    return res.status(400).json({
+      message: "Invalid JSON request.",
     });
   }
-);
+
+  if (error.type === "entity.too.large") {
+    return res.status(413).json({
+      message:
+        "Request is too large. Please use a smaller profile image.",
+    });
+  }
+
+  if (error.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      message: "Origin not allowed by CORS.",
+    });
+  }
+
+  console.error(
+    "Unhandled server error:",
+    error
+  );
+
+  return res.status(500).json({
+    message: "Internal server error.",
+  });
+});
 
 /*
   ===============================
@@ -172,14 +171,11 @@ app.use(
 async function startServer() {
   await connectDatabase();
 
-  app.listen(
-    PORT,
-    () => {
-      console.log(
-        `Server running on http://localhost:${PORT}`
-      );
-    }
-  );
+  app.listen(PORT, () => {
+    console.log(
+      `Server running on port ${PORT}`
+    );
+  });
 }
 
 startServer();
